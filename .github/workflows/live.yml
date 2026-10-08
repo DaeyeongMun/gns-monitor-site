@@ -1,0 +1,34 @@
+name: live-refresh
+on:
+  schedule:
+    - cron: "30 22 * * *"     # 매일 07:30 KST
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests cryptography
+      - name: fetch public sources
+        env:
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+        run: python live_fetch.py
+      - name: seal
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+        run: python encrypt.py live build/live.json docs/live.enc
+      - name: commit
+        run: |
+          git config user.name "gns-monitor-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add docs/live.enc
+          git diff --cached --quiet || git commit -m "live: $(date -u +%Y-%m-%d)"
+          git push
