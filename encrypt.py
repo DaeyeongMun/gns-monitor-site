@@ -92,7 +92,9 @@ async function shim(input,init){
   const u=typeof input==='string'?input:(input&&input.url)||'';
   if(!u.startsWith('/api/')) return realFetch(input,init);
   const method=((init&&init.method)||'GET').toUpperCase();
-  if(method!=='GET') return J({ok:false,error:'정적 배포본에서는 지원하지 않는 기능입니다 (서버판 전용)'},405);
+  if(method!=='GET'){ const MSG='정적 배포본에서는 지원하지 않는 기능입니다 (사내 모니터 서버판 전용)';
+    if(u.startsWith('/api/snapshot')) return new Response(MSG,{status:405});            // 스냅샷 저장: 화면이 '실패'로 표시
+    return J({ok:false,state:'error',error:MSG,message:MSG},405); }                      // 업로드·조사: 화면이 메시지 표시
   let key; try{ key=decodeURIComponent(u); }catch(e){ key=u; } const path=key.split('?')[0]; const Q=new URLSearchParams(u.split('?')[1]||'');   // 쿼리는 인코딩된 원문으로 파싱 ('+' 보존)
   if(path==='/api/issues') key='/api/issues';
   if(path==='/api/news') key='/api/news';
