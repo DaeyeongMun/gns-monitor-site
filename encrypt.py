@@ -93,7 +93,7 @@ async function shim(input,init){
   if(!u.startsWith('/api/')) return realFetch(input,init);
   const method=((init&&init.method)||'GET').toUpperCase();
   if(method!=='GET') return J({ok:false,error:'정적 배포본에서는 지원하지 않는 기능입니다 (서버판 전용)'},405);
-  let key=decodeURIComponent(u); let [path,qs]=key.split('?'); const Q=new URLSearchParams(qs||'');
+  let key; try{ key=decodeURIComponent(u); }catch(e){ key=u; } const path=key.split('?')[0]; const Q=new URLSearchParams(u.split('?')[1]||'');   // 쿼리는 인코딩된 원문으로 파싱 ('+' 보존)
   if(path==='/api/issues') key='/api/issues';
   if(path==='/api/news') key='/api/news';
   if(path==='/api/company-search'){ const t=(Q.get('q')||'').toLowerCase(); const co=(await loadChunk('core'))['/api/companies']||{groups:{}};
