@@ -151,10 +151,14 @@ class Crawl:
         with cf.ThreadPoolExecutor(workers) as ex:
             for url, obj in zip(urls, ex.map(lambda u: get(u), urls)):
                 done += 1
-                if obj is None:
-                    continue
                 path, params = parse(url)
-                self.chunks.setdefault(chunk_of(path, params), {})[key_of(url)] = obj
+                ch, k = chunk_of(path, params), key_of(url)
+                if obj is None:
+                    if k in self.cache.get(ch, {}):          # 실패하면 이전 수집값 유지 (외부 API 장애 대비)
+                        self.chunks.setdefault(ch, {})[k] = self.cache[ch][k]
+                        FAIL[-1] = (FAIL[-1][0], FAIL[-1][1] + " → 캐시 유지")
+                    continue
+                self.chunks.setdefault(ch, {})[k] = obj
                 if done % 500 == 0:
                     print(f"   {done}/{len(urls)}  {time.time()-t:.0f}s", flush=True)
         print(f"   {len(urls)}건 {time.time()-t:.0f}s", flush=True)
