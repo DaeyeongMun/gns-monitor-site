@@ -198,6 +198,8 @@ def crawl() -> Crawl:
         t = q(n)
         for ep in ("brief", "trend", "products", "forms", "forms-sales", "manufacturing", "toll", "channels", "clinical", "dossier", "dossier/status"):
             c.add(f"/api/company-{ep}?target={t}")
+        for y in ("", "2024", "2025"):                       # 생산 현황 연도 드롭다운
+            c.add(f"/api/company-toll?target={t}&year={y}")
         c.add(f"/api/model/company?target={t}")
         for y in [str(y) for y in range(NOW - 5, NOW)]:
             c.add(f"/api/compare?target={t}&year={y}")
