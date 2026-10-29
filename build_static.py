@@ -172,14 +172,16 @@ def crawl() -> Crawl:
     core = ["/api/companies", "/api/cmo-landscape", "/api/backlog", "/api/market/summary", "/api/news", "/api/issues",
             "/api/data-status", "/api/data-inventory", "/api/price-match/status", "/api/drug-prices/status",
             "/api/health", "/api/version", "/api/snapshots", "/api/model/signals", "/api/model/forms", "/api/model/companies",
-            "/api/backlog/products?site=&form=&equip=", "/api/price-reform/ranking", "/api/price-reform/gns"]
+            "/api/backlog/products?site=&form=&equip=", "/api/price-reform/ranking", "/api/price-reform/gns",
+            "/api/license-matrix/ranking?year=", "/api/license-matrix/ranking?year=2024", "/api/license-matrix/ranking?year=2025"]
     core += ["/api/company-quotes?cats=" + q(cat) for cat in QUOTE_CATS]
     core += [f"/api/self-overview?year={y}" for y in range(NOW - 5, NOW + 1)]
     for u in core:
         c.add(u)
     c.run()
     companies = c.chunks["core"]["/api/companies"]
-    names = [x["name"] for g in companies["groups"].values() for x in g]
+    # 제뉴원(자사)은 경쟁사 목록에 없지만 '제뉴원 현황' 화면이 같은 기업 API를 부른다 → 반드시 포함
+    names = [companies.get("base") or "제뉴원사이언스"] + [x["name"] for g in companies["groups"].values() for x in g]
     backlog = c.chunks["core"].get("/api/backlog") or {}
     signals = c.chunks["core"].get("/api/model/signals") or {}
     rank = (c.chunks["core"].get("/api/model/companies") or {}).get("rows") or []
@@ -198,8 +200,9 @@ def crawl() -> Crawl:
         t = q(n)
         for ep in ("brief", "trend", "products", "forms", "forms-sales", "manufacturing", "toll", "channels", "clinical", "dossier", "dossier/status"):
             c.add(f"/api/company-{ep}?target={t}")
-        for y in ("", "2024", "2025"):                       # 생산 현황 연도 드롭다운
+        for y in ("", "2024", "2025"):                       # 생산 현황 · 허가×생산 매트릭스 연도 드롭다운
             c.add(f"/api/company-toll?target={t}&year={y}")
+            c.add(f"/api/company-matrix?target={t}&year={y}")
         c.add(f"/api/model/company?target={t}")
         for y in [str(y) for y in range(NOW - 5, NOW)]:
             c.add(f"/api/compare?target={t}&year={y}")
