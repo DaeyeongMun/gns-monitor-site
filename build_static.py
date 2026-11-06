@@ -173,7 +173,8 @@ def crawl() -> Crawl:
             "/api/data-status", "/api/data-inventory", "/api/price-match/status", "/api/drug-prices/status",
             "/api/health", "/api/version", "/api/snapshots", "/api/model/signals", "/api/model/forms", "/api/model/companies",
             "/api/backlog/products?site=&form=&equip=", "/api/price-reform/ranking", "/api/price-reform/gns",
-            "/api/license-matrix/ranking?year=", "/api/license-matrix/ranking?year=2024", "/api/license-matrix/ranking?year=2025"]
+            "/api/license-matrix/ranking?year=", "/api/license-matrix/ranking?year=2024", "/api/license-matrix/ranking?year=2025",
+            "/api/insight/site-changes", "/api/insight/sales-targets"]
     core += ["/api/company-quotes?cats=" + q(cat) for cat in QUOTE_CATS]
     core += [f"/api/self-overview?year={y}" for y in range(NOW - 5, NOW + 1)]
     for u in core:
