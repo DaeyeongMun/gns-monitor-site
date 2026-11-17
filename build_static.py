@@ -31,7 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BASE = os.environ.get("GNS_API", "http://localhost:5001")
 DOCS = os.path.join(HERE, "docs")
 BUILD = os.path.join(HERE, "build")
-PASSWORD = os.environ.get("SITE_PASSWORD", "gns900118")
+from encrypt import PASSWORD  # noqa: E402  (환경변수 또는 build/.site_password)
 ITER = 200_000
 NOW = dt.date.today().year
 QUOTE_CATS = ["cdmo", "major", "api", "excipient,packaging", "bio,cro"]

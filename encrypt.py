@@ -19,7 +19,18 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PASSWORD = os.environ.get("SITE_PASSWORD", "gns900118")
+def _password() -> str:
+    """SITE_PASSWORD 환경변수(Actions secret) > build/.site_password (로컬, git 제외). 코드에 비밀번호를 두지 않는다."""
+    pw = os.environ.get("SITE_PASSWORD")
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build", ".site_password")
+    if not pw and os.path.exists(f):
+        pw = open(f, encoding="utf-8").read().strip()
+    if not pw:
+        sys.exit("비밀번호 없음: SITE_PASSWORD 환경변수 또는 build/.site_password 필요")
+    return pw
+
+
+PASSWORD = _password()
 ITER = 200_000
 
 
