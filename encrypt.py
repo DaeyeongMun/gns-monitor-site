@@ -72,6 +72,7 @@ function chunkOf(path,Q){
   if(path==='/api/product-makers'||path==='/api/product-issues') return 'pq_'+(h(Q.get('q')||'')%%24);
   if(path==='/api/model/molecule') return 'mol_'+(h(Q.get('mol')||'')%%12);
   if(path.startsWith('/api/company-')||path==='/api/compare'||path==='/api/model/company') return 'co_'+(h(Q.get('target')||'')%%32);
+  if(path.startsWith('/api/tool/')) return 'tool_'+path.split('/')[3];
   return 'core';
 }
 async function loadChunk(name){

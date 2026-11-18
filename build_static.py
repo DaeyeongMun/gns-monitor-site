@@ -91,6 +91,8 @@ def chunk_of(path: str, params: dict) -> str:
         return "mol_%d" % (hsh(params.get("mol", "")) % 12)
     if path.startswith("/api/company-") or path in ("/api/compare", "/api/model/company"):
         return "co_%d" % (hsh(params.get("target", "")) % 32)
+    if path.startswith("/api/tool/"):
+        return "tool_" + path.split("/")[3]
     return "core"
 
 
@@ -107,7 +109,7 @@ def parse(url: str):
 CACHE = os.path.join(BUILD, "cache")
 MODE = ("--fresh" if "--fresh" in sys.argv else ("--quick" if "--quick" in sys.argv else "--default"))
 # 캐시 재사용 정책: --fresh 전부 새로 / --quick 캐시에 없는 것만 / 기본 = 가벼운 청크(core·bl·연도별·model)만 새로, pd_·pq_·co_·mol_ 은 캐시
-REFRESH_FAMILIES = ("core", "bl", "products_", "ingr_", "oppty_")
+REFRESH_FAMILIES = ("core", "bl", "products_", "ingr_", "oppty_", "tool_")
 # --refresh=co_,mol_ : 기본 모드에서 추가로 새로 받을 청크 계열 (예: 유비스트·기업 화면 변경 후)
 REFRESH_FAMILIES += tuple(x for a in sys.argv if a.startswith("--refresh=") for x in a[10:].split(",") if x)
 
@@ -175,6 +177,7 @@ def crawl() -> Crawl:
             "/api/backlog/products?site=&form=&equip=", "/api/price-reform/ranking", "/api/price-reform/gns",
             "/api/license-matrix/ranking?year=", "/api/license-matrix/ranking?year=2024", "/api/license-matrix/ranking?year=2025",
             "/api/insight/site-changes", "/api/insight/sales-targets", "/api/insight/price-pressure", "/api/insight/facility-gaps", "/api/sales/cso"]
+    core += ["/api/tool/" + n for n in ("deals_kr", "deals_world", "drugnav_list", "drugnav_criteria", "drugnav_annex1", "drugnav_rules", "drugnav_archive", "intl_prices")]
     core += ["/api/company-quotes?cats=" + q(cat) for cat in QUOTE_CATS]
     core += [f"/api/self-overview?year={y}" for y in range(NOW - 5, NOW + 1)]
     for u in core:
