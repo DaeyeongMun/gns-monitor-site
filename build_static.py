@@ -112,6 +112,10 @@ MODE = ("--fresh" if "--fresh" in sys.argv else ("--quick" if "--quick" in sys.a
 REFRESH_FAMILIES = ("core", "bl", "products_", "ingr_", "oppty_", "tool_")
 # --refresh=co_,mol_ : 기본 모드에서 추가로 새로 받을 청크 계열 (예: 유비스트·기업 화면 변경 후)
 REFRESH_FAMILIES += tuple(x for a in sys.argv if a.startswith("--refresh=") for x in a[10:].split(",") if x)
+# --only=tool_ : 이 계열만 새로 받고 나머지는 전부 캐시 (주간 딜맵 자동 갱신용 — 서버 warm 불필요)
+ONLY = tuple(x for a in sys.argv if a.startswith("--only=") for x in a[7:].split(",") if x)
+if ONLY:
+    REFRESH_FAMILIES = ONLY
 
 
 def _family_refresh(chunk: str) -> bool:
