@@ -195,7 +195,7 @@ def crawl() -> Crawl:
     rank = (c.chunks["core"].get("/api/model/companies") or {}).get("rows") or []
 
     print("[2] 연도별 대용량 (품목·주성분·수주전환) + 설비별 잔고")
-    for y in range(NOW - 3, NOW + 1):
+    for y in range(NOW - 2, NOW + 1):
         c.add(f"/api/products?year={y}&limit=5000")
         c.add(f"/api/ingredient-overview?year={y}")
         c.add(f"/api/backlog/opportunity?year={y}")
@@ -223,11 +223,11 @@ def crawl() -> Crawl:
 
     print("[4] 품목 상세 · 약가 포지션 · 생산처 · 이슈 기사")
     makers_q, issue_q = set(), set()
-    for y in range(NOW - 3, NOW + 1):
+    for y in range(NOW - 2, NOW + 1):
         d = c.chunks.get(f"products_{y}", {}).get(f"/api/products?year={y}&limit=5000") or {}
         for p in d.get("products") or []:
             c.add(f"/api/product/{p['code']}?year={y}")
-            c.add(f"/api/product-peers?code={q(p['code'])}")
+            c.add(f"/api/product-peers?code={q(p['code'])}&year={y}")
             makers_q.add(p.get("approval_name") or p.get("product"))
             issue_q.add((p.get("ingredient") or "").split(",")[0].strip() or p.get("approval_name") or p.get("product"))
     for s in makers_q:
