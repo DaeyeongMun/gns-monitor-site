@@ -1,0 +1,14 @@
+{
+ "ks": "cpWkrGXKhWsBTrsXRSX5SA==",
+ "users": {
+  "4643f526d3b8b49d": {
+   "salt": "+/XG7iCA91a9qCxQg75EXw==",
+   "iv": "RHDJ///k4h8oCCv4",
+   "ct": "tNcDrWxtMnrV8xSbsYx1oKzUE4sQQi7fxrDhvjIk2YJqaaVptoAOGkFLR5KX/wyyYESrz9srnigPPWts3/o/3uHk/EqNKagCC47ycBy9fMn+deqqQF09",
+   "iter": 200000,
+   "role": "admin",
+   "menus": null,
+   "m": "hYwfvKgHinPfzxbg/aksD5QNMGbXNuccYl4xpA7uWA2+/K66BGB3AsbyIpdv1y4jf9BpsjN7/autP0YRNFXNOB1TlCmq5vooex0UF8+jffMjYNJ9bqiTS3I6hx0Vpw92FMWoBh0mL4FGvqXdfzkIZQDKIZkBNmNotJEC9XCjla/bPaJwaFpy3nUPvMZe"
+  }
+ }
+}

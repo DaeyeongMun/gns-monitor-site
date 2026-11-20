@@ -175,7 +175,7 @@ class Crawl:
 def crawl() -> Crawl:
     c = Crawl()
     print("[1] 기본 엔드포인트")
-    core = ["/api/companies", "/api/cmo-landscape", "/api/backlog", "/api/market/summary", "/api/news", "/api/news/saved", "/api/issues",
+    core = ["/api/companies", "/api/cmo-landscape", "/api/backlog", "/api/market/summary", "/api/news", "/api/issues",
             "/api/data-status", "/api/data-inventory", "/api/price-match/status", "/api/drug-prices/status",
             "/api/health", "/api/version", "/api/snapshots", "/api/model/signals", "/api/model/forms", "/api/model/companies",
             "/api/backlog/products?site=&form=&equip=", "/api/price-reform/ranking", "/api/price-reform/gns",

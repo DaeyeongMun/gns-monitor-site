@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import gzip
-import hashlib
 import json
 import os
 import secrets
@@ -135,27 +134,51 @@ async function shim(input,init){
   if(obj&&typeof obj==='object'&&obj.__st) return J(obj.__b,obj.__st);
   return J(overlay(path,Q,obj));
 }
-// 사용자 모드: P.users = {해시(사번): {봉인, role, menus}} — '사번:비밀번호'로 풀면 {사이트 비밀번호, 사번, 이름}
-const USERS=P.users||{}, UMODE=Object.keys(USERS).length>0;
+// 사용자 = docs/users.json {ks, users:{해시(사번): {봉인, role, menus, m}}} — 빌드 없이 관리자 화면이 GitHub에 바로 저장한다.
+// 봉인 = '사번:비밀번호'로 열리는 {사이트 비밀번호, 사번, 이름} · m = 사이트 키(ks)로 봉인한 {사번, 이름, 등록일…} (관리자 목록용)
+let USERS={}, KS='', UMODE=false, UREADY=null;
 const LS={get:k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set:(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} }, del:k=>{ try{ localStorage.removeItem(k); }catch(e){} }};
 const e64=u=>{ let s=''; u.forEach(c=>s+=String.fromCharCode(c)); return btoa(s); };
-async function hid(s){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('gns:'+s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16); }
+const TE=new TextEncoder();
+async function hid(s){ const b=await crypto.subtle.digest('SHA-256',TE.encode('gns:'+s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16); }
+async function kdf(secret,salt,iter,use){ return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},await crypto.subtle.importKey('raw',TE.encode(secret),'PBKDF2',false,['deriveKey']),{name:'AES-GCM',length:256},false,use); }
 async function unwrap(w,id,pw){ return JSON.parse(await dec(await derive(id+':'+pw,w.salt,w.iter),b64(w.iv),b64(w.ct))); }
-// 이 기기에서 바꾼 비밀번호: 관리자가 반영하기 전까지 localStorage 의 봉인(base = 그때 공개된 봉인)을 쓴다.
-// 공개 봉인이 바뀌었으면(관리자 반영·초기화) 로컬 봉인은 버린다.
+async function wrapNew(id,pw,info){
+  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12)), k=await kdf(id+':'+pw,salt,P.iter,['encrypt']);
+  const gz=new Uint8Array(await new Response(new Blob([JSON.stringify(info)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  return {salt:e64(salt),iv:e64(iv),ct:e64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,gz))),iter:P.iter};
+}
+UREADY=(async()=>{ const r=await realFetch('users.json?v='+Date.now()); if(!r.ok) throw new Error('users '+r.status); const j=await r.json(); USERS=j.users||{}; KS=j.ks||''; UMODE=Object.keys(USERS).length>0; })();
+// 이 기기에서 바꾼 비밀번호: 관리자가 반영하기 전까지 localStorage 봉인(base = 그때 공개 봉인)을 쓴다. 공개 봉인이 바뀌면 버린다.
 function localWrap(h){ try{ const o=JSON.parse(LS.get('gns_wrap:'+h)||'null'); if(o&&o.base===USERS[h].ct) return o; if(o) LS.del('gns_wrap:'+h); }catch(e){} return null; }
+async function secApi(user){
+  if(!user) return null;
+  const sk=KS?await kdf(PW,b64(KS),P.iter,['encrypt','decrypt']):null;
+  return {
+    seal:async o=>{ const iv=crypto.getRandomValues(new Uint8Array(12)), ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},sk,TE.encode(JSON.stringify(o)))); const a=new Uint8Array(12+ct.length); a.set(iv); a.set(ct,12); return e64(a); },
+    unseal:async s=>{ const a=b64(s); return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:a.slice(0,12)},sk,a.slice(12)))); },
+    wrap:(id,pw,name)=>wrapNew(id,pw,{pw:PW,id,name}),
+    hid, ks:KS,
+    pwChange:async(cur,nw)=>{ const h=await hid(user.id), pub=USERS[h], lw=localWrap(h);
+      await unwrap(lw||pub,user.id,cur);
+      const w=await wrapNew(user.id,nw,{pw:PW,id:user.id,name:user.name});
+      LS.set('gns_wrap:'+h,JSON.stringify({...w,base:pub.ct})); user.dflt=false; LS.set('gns_user',JSON.stringify(user));
+      return btoa(JSON.stringify({id:user.id,wrap:w})); }
+  };
+}
 async function open(pw,user){
   const err=document.getElementById('err'); err.textContent='여는 중…';
   try{ KEY=await derive(pw,P.salt,P.iter); PW=pw; const app=b64(P.app); const html=await dec(KEY,app.slice(0,12),app.slice(12));
     LS.set('gns_pw',pw); if(user) LS.set('gns_user',JSON.stringify(user));
     await Promise.race([loadLive(),new Promise(r=>setTimeout(r,6000))]);
     window.fetch=shim; window.__GNS_STATIC={built:P.built,live:LIVE&&LIVE.fetched_at}; window.__GNS_USER=user||null;
-    window.__GNS_PWCHANGE=user?pwChange:null;
+    window.__GNS_SEC=await secApi(user);
     document.open(); document.write(html); document.close();
   }catch(e){ LS.del('gns_pw'); LS.del('gns_user'); err.textContent=UMODE?'사번 또는 비밀번호가 맞지 않습니다.':'비밀번호가 맞지 않습니다.'; }
 }
 async function login(){
   const err=document.getElementById('err'), id=document.getElementById('uid').value.trim(), pw=document.getElementById('pw').value;
+  try{ await UREADY; }catch(e){ err.textContent='사용자 목록을 불러오지 못했습니다. 잠시 뒤 다시 시도하세요.'; return; }
   if(!UMODE) return open(pw);
   err.textContent='확인 중…';
   try{ const h=await hid(id), pub=USERS[h]; if(!pub) throw 0;
@@ -163,38 +186,17 @@ async function login(){
     await open(info.pw,{id:info.id,name:info.name,role:pub.role,menus:pub.menus,dflt:!lw&&pw===id});
   }catch(e){ err.textContent='사번 또는 비밀번호가 맞지 않습니다.'; }
 }
-// 비밀번호 바꾸기 (대시보드가 호출) — 새 비밀번호로 봉인을 만들어 이 기기에 바로 적용 + 관리자에게 줄 변경 코드 반환
-async function pwChange(cur,nw){
-  const u=window.__GNS_USER, h=await hid(u.id), pub=USERS[h], lw=localWrap(h);
-  await unwrap(lw||pub,u.id,cur);                                   // 지금 비밀번호 확인 (틀리면 예외)
-  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
-  const k=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:P.iter,hash:'SHA-256'},await crypto.subtle.importKey('raw',new TextEncoder().encode(u.id+':'+nw),'PBKDF2',false,['deriveKey']),{name:'AES-GCM',length:256},false,['encrypt']);
-  const gz=new Uint8Array(await new Response(new Blob([JSON.stringify({pw:PW,id:u.id,name:u.name})]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
-  const w={salt:e64(salt),iv:e64(iv),ct:e64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,gz))),iter:P.iter};
-  LS.set('gns_wrap:'+h,JSON.stringify({...w,base:pub.ct}));
-  u.dflt=false; LS.set('gns_user',JSON.stringify(u));
-  return btoa(JSON.stringify({id:u.id,wrap:w}));
-}
-if(UMODE){ document.getElementById('uid').style.display=''; document.getElementById('lead').textContent='임직원 로그인 · 사번 / 비밀번호';
-  document.getElementById('links').style.display=''; document.getElementById('reqA').onclick=()=>{ const r=document.getElementById('req'); r.style.display=r.style.display?'':'none'; }; }
 document.getElementById('go').onclick=login;
 ['uid','pw'].forEach(i=>document.getElementById(i).addEventListener('keydown',e=>{ if(e.key==='Enter') login(); }));
-(async()=>{ const saved=LS.get('gns_pw'); if(!saved) return; let su=null; try{ su=JSON.parse(LS.get('gns_user')||'null'); }catch(e){}
+document.getElementById('reqA').onclick=()=>{ const r=document.getElementById('req'); r.style.display=r.style.display?'':'none'; };
+(async()=>{ try{ await UREADY; }catch(e){ document.getElementById('err').textContent='사용자 목록을 불러오지 못했습니다. 새로고침 해 주세요.'; return; }
+  if(UMODE){ document.getElementById('uid').style.display=''; document.getElementById('lead').textContent='임직원 로그인 · 사번 / 비밀번호'; document.getElementById('links').style.display=''; }
+  const saved=LS.get('gns_pw'); if(!saved) return; let su=null; try{ su=JSON.parse(LS.get('gns_user')||'null'); }catch(e){}
   if(!UMODE) return open(saved);
-  const pub=su&&USERS[await hid(su.id)]; if(!pub){ LS.del('gns_pw'); LS.del('gns_user'); return; }   // 삭제된 사용자·로그인 기록 없음 → 다시 로그인
+  const pub=su&&USERS[await hid(su.id)]; if(!pub){ LS.del('gns_pw'); LS.del('gns_user'); return; }   // 삭제된 사용자 → 다시 로그인
   open(saved,{...su,role:pub.role,menus:pub.menus}); })();
 })();
 </script></body></html>"""
-
-
-def _public_users() -> dict:
-    """build/users.json (모니터 '사용자 관리'가 만든 것, git 제외) → {해시(사번): {봉인 + 권한·메뉴}}.
-    이름·사번 평문은 싣지 않는다. 비어 있으면 단일 비밀번호 모드."""
-    try:
-        return {hashlib.sha256(("gns:" + k).encode("utf-8")).hexdigest()[:16]: {**v["wrap"], "role": v["role"], "menus": v.get("menus")}
-                for k, v in json.load(open(os.path.join(HERE, "build", "users.json"), encoding="utf-8")).items()}
-    except (OSError, ValueError):
-        return {}
 
 
 def write_shell(manifest: dict):
@@ -202,7 +204,6 @@ def write_shell(manifest: dict):
     os.makedirs(os.path.join(HERE, "docs"), exist_ok=True)
     out = os.path.join(HERE, "docs", "index.html")
     built = manifest["built"]
-    manifest = {**manifest, "users": _public_users()}
     with open(out, "w", encoding="utf-8") as f:
         f.write(SHELL % (f"{built[:4]}-{built[4:6]}-{built[6:8]} {built[8:10]}:{built[10:12]} 빌드", json.dumps(manifest, ensure_ascii=False)))
     open(os.path.join(HERE, "docs", ".nojekyll"), "w").close()
