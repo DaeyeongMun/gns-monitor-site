@@ -80,6 +80,7 @@ function chunkOf(path,Q){
   if(path==='/api/ingredient-overview') return 'ingr_'+(Q.get('year')||'');
   if(path==='/api/backlog/opportunity') return 'oppty_'+(Q.get('year')||'');
   if(path==='/api/backlog/products') return 'bl';
+  if(path==='/api/cso-tree') return 'cso';
   if(path.startsWith('/api/product/')) return 'pd_'+(h(path.split('/')[3])%%24);
   if(path==='/api/product-peers') return 'pd_'+(h(Q.get('code')||'')%%24);
   if(path==='/api/product-makers'||path==='/api/product-issues') return 'pq_'+(h(Q.get('q')||'')%%24);
