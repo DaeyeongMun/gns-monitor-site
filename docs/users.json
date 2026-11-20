@@ -79,8 +79,37 @@
    "ct": "+c48/GWGZ6nsXYiS9aAb2BbGe4NJY4N1Y1RnhxfS2D1ClsQMOZ/4rnEiT7pI9ntOTJ4fDaf4uyllyAGZWkGqyEj3nTt6vuH+Y8dJJP7XY4vQledXeEKZpF8=",
    "iter": 200000,
    "role": "user",
-   "menus": null,
-   "m": "gDeIE73rUSv9rn4k0zs3yrCBi68JD3+nwsYPY3XPszCdxJXHqtCOpicXeBh5bjHimQmOr8n9ge75+B4ryN3gmL1i11qMFNP+4TYSxlMosSU8f0OW2wqvYtmGTOGgUn3bqbbZ5xeHC5rKeV93fH6e41/uSXvu0Cj7uuTSDDWfzuFCpuSaiw+ABvKPDz+1leE16xgyVA=="
+   "menus": [
+    "self|",
+    "compare|",
+    "complist|cdmo",
+    "complist|major",
+    "complist|api",
+    "complist|excipient,packaging",
+    "complist|bio,cro",
+    "ingredient|",
+    "sig|",
+    "formmkt|",
+    "cmo|",
+    "dncrit|",
+    "dnsim|",
+    "reform|",
+    "dnintl|",
+    "dnben|",
+    "dnannex|",
+    "dnarch|",
+    "dealmap|",
+    "target|",
+    "dnlit|",
+    "oppty|",
+    "transfer|",
+    "saletgt|",
+    "sitechg|",
+    "pricepr|",
+    "selfpr|",
+    "facgap|"
+   ],
+   "m": "WIBMNdz92oU9/szgTaoHn9jsSh+Zl74JND5T6RoR10ctCnfEeZKa23ihojvUIrHSll6twaxaORRogcD0g4RDMdfre+kNc5Bbr0UTYO5x7nzUjskt8+KQoAUuf0F3K4piCSIituzuJD7q477+LPZvyjaflIC5Pk3db6MTPpWcZ/SbqwI4+VEion7Qxso3wnd2ad1FsQ=="
   }
  }
 }
