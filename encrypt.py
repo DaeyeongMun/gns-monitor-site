@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import gzip
+import hashlib
 import json
 import os
 import secrets
@@ -44,15 +45,28 @@ def seal(plain: bytes, password: str) -> dict:
 
 SHELL = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Genuone Monitor</title><meta name="robots" content="noindex,nofollow">
-<style>html,body{height:100%%;margin:0;font-family:'Noto Sans KR',system-ui,sans-serif;background:#0f1b2d;color:#fff}
-.box{max-width:360px;margin:18vh auto;padding:28px 24px;background:#16263d;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
-h1{font-size:18px;margin:0 0 6px}p{font-size:12.5px;color:#9fb0c7;margin:0 0 18px}
-input{width:100%%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid #2e4160;background:#0f1b2d;color:#fff;font-size:16px}
-button{width:100%%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:#00a29a;color:#fff;font-size:15px;font-weight:700}
-.err{color:#ff8a8a;font-size:12.5px;margin-top:10px;min-height:16px}.foot{font-size:10.5px;color:#6f819b;margin-top:18px;line-height:1.5}</style></head>
-<body><div class="box"><h1>제뉴원사이언스 내/외부 환경 모니터</h1><p>경영진 전용 · 비밀번호를 입력하세요</p>
-<input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password"><button id="go">열기</button><div class="err" id="err"></div>
-<div class="foot">본 페이지와 데이터의 권리는 제뉴원사이언스에 귀속됩니다. 임직원 내부 업무 목적으로만 사용하며 외부 반출·공개를 금합니다.<br>데이터 기준 %s</div></div>
+<style>html,body{min-height:100%%;margin:0;font-family:'Noto Sans KR',system-ui,sans-serif;background:#f4f6f8;color:#14202e}
+.wrap{max-width:380px;margin:11vh auto 40px;padding:0 16px;text-align:center}
+.brand{font-size:12px;font-weight:800;color:#00a29a;letter-spacing:1.5px}
+h1{font-size:28px;margin:6px 0 2px;letter-spacing:.5px}.sub{font-size:12.5px;color:#6b7a8c}
+.bar{width:36px;height:3px;background:#00a29a;margin:12px auto 22px;border-radius:2px}
+.card{background:#fff;border-radius:14px;box-shadow:0 4px 24px rgba(20,32,46,.08);padding:22px 20px;text-align:left}
+.card h2{font-size:15px;margin:0 0 14px;display:flex;gap:9px;align-items:center}
+.ic{width:30px;height:30px;border-radius:9px;background:#e6f6f5;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+input{width:100%%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid #d5dde6;background:#fff;color:#14202e;font-size:15px;margin-bottom:8px}
+input:focus{outline:2px solid #00a29a;border-color:#00a29a}
+button{width:100%%;margin-top:4px;padding:12px;border:0;border-radius:10px;background:#14202e;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+.err{color:#d64545;font-size:12.5px;margin-top:10px;min-height:16px}
+.links{font-size:12px;color:#6b7a8c;margin-top:6px;text-align:center}.links a{color:#00a29a;cursor:pointer;font-weight:600}
+.req{font-size:12px;color:#14202e;background:#f4f6f8;border-radius:8px;padding:10px 12px;margin-top:10px;line-height:1.6}
+.note{font-size:11px;color:#6b7a8c;margin-top:18px;line-height:1.7}</style></head>
+<body><div class="wrap"><div class="brand">GENUONE SCIENCE</div><h1>Monitor</h1><div class="sub">제뉴원사이언스 내/외부 환경 모니터</div><div class="bar"></div>
+<div class="card"><h2><span class="ic">🔒</span><span id="lead">경영진 전용 · 비밀번호</span></h2>
+<input id="uid" placeholder="사번" autocomplete="username" style="display:none">
+<input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password"><button id="go">로그인</button><div class="err" id="err"></div>
+<div class="links" id="links" style="display:none">등록된 사용자만 · <a id="reqA">처음이세요? 사용 신청</a></div>
+<div class="req" id="req" style="display:none">전략기획팀(관리자)에 <b>사번·이름</b>을 알려 주세요. 등록되면 초기 비밀번호는 사번과 같고, 처음 들어올 때 새 비밀번호로 바꿉니다.</div></div>
+<div class="note">🔐 사번별 암호 봉인 · 볼 수 있는 메뉴는 관리자가 사람마다 지정 · 로그인은 이 브라우저에 기억됩니다 (상단 이름 배지 = 로그아웃)<br>본 페이지와 데이터의 권리는 제뉴원사이언스에 귀속됩니다. 임직원 내부 업무 목적으로만 사용하며 외부 반출·공개를 금합니다.<br>데이터 기준 %s</div></div>
 <script>
 (function(){
 const P=%s;
@@ -121,20 +135,66 @@ async function shim(input,init){
   if(obj&&typeof obj==='object'&&obj.__st) return J(obj.__b,obj.__st);
   return J(overlay(path,Q,obj));
 }
-async function open(pw){
+// 사용자 모드: P.users = {해시(사번): {봉인, role, menus}} — '사번:비밀번호'로 풀면 {사이트 비밀번호, 사번, 이름}
+const USERS=P.users||{}, UMODE=Object.keys(USERS).length>0;
+const LS={get:k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set:(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} }, del:k=>{ try{ localStorage.removeItem(k); }catch(e){} }};
+const e64=u=>{ let s=''; u.forEach(c=>s+=String.fromCharCode(c)); return btoa(s); };
+async function hid(s){ const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('gns:'+s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16); }
+async function unwrap(w,id,pw){ return JSON.parse(await dec(await derive(id+':'+pw,w.salt,w.iter),b64(w.iv),b64(w.ct))); }
+// 이 기기에서 바꾼 비밀번호: 관리자가 반영하기 전까지 localStorage 의 봉인(base = 그때 공개된 봉인)을 쓴다.
+// 공개 봉인이 바뀌었으면(관리자 반영·초기화) 로컬 봉인은 버린다.
+function localWrap(h){ try{ const o=JSON.parse(LS.get('gns_wrap:'+h)||'null'); if(o&&o.base===USERS[h].ct) return o; if(o) LS.del('gns_wrap:'+h); }catch(e){} return null; }
+async function open(pw,user){
   const err=document.getElementById('err'); err.textContent='여는 중…';
   try{ KEY=await derive(pw,P.salt,P.iter); PW=pw; const app=b64(P.app); const html=await dec(KEY,app.slice(0,12),app.slice(12));
-    sessionStorage.setItem('gns_pw',pw);
+    LS.set('gns_pw',pw); if(user) LS.set('gns_user',JSON.stringify(user));
     await Promise.race([loadLive(),new Promise(r=>setTimeout(r,6000))]);
-    window.fetch=shim; window.__GNS_STATIC={built:P.built,live:LIVE&&LIVE.fetched_at};
+    window.fetch=shim; window.__GNS_STATIC={built:P.built,live:LIVE&&LIVE.fetched_at}; window.__GNS_USER=user||null;
+    window.__GNS_PWCHANGE=user?pwChange:null;
     document.open(); document.write(html); document.close();
-  }catch(e){ err.textContent='비밀번호가 맞지 않습니다.'; }
+  }catch(e){ LS.del('gns_pw'); LS.del('gns_user'); err.textContent=UMODE?'사번 또는 비밀번호가 맞지 않습니다.':'비밀번호가 맞지 않습니다.'; }
 }
-document.getElementById('go').onclick=()=>open(document.getElementById('pw').value);
-document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter') open(e.target.value); });
-const saved=sessionStorage.getItem('gns_pw'); if(saved) open(saved);
+async function login(){
+  const err=document.getElementById('err'), id=document.getElementById('uid').value.trim(), pw=document.getElementById('pw').value;
+  if(!UMODE) return open(pw);
+  err.textContent='확인 중…';
+  try{ const h=await hid(id), pub=USERS[h]; if(!pub) throw 0;
+    const lw=localWrap(h), info=await unwrap(lw||pub,id,pw);
+    await open(info.pw,{id:info.id,name:info.name,role:pub.role,menus:pub.menus,dflt:!lw&&pw===id});
+  }catch(e){ err.textContent='사번 또는 비밀번호가 맞지 않습니다.'; }
+}
+// 비밀번호 바꾸기 (대시보드가 호출) — 새 비밀번호로 봉인을 만들어 이 기기에 바로 적용 + 관리자에게 줄 변경 코드 반환
+async function pwChange(cur,nw){
+  const u=window.__GNS_USER, h=await hid(u.id), pub=USERS[h], lw=localWrap(h);
+  await unwrap(lw||pub,u.id,cur);                                   // 지금 비밀번호 확인 (틀리면 예외)
+  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+  const k=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:P.iter,hash:'SHA-256'},await crypto.subtle.importKey('raw',new TextEncoder().encode(u.id+':'+nw),'PBKDF2',false,['deriveKey']),{name:'AES-GCM',length:256},false,['encrypt']);
+  const gz=new Uint8Array(await new Response(new Blob([JSON.stringify({pw:PW,id:u.id,name:u.name})]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+  const w={salt:e64(salt),iv:e64(iv),ct:e64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,gz))),iter:P.iter};
+  LS.set('gns_wrap:'+h,JSON.stringify({...w,base:pub.ct}));
+  u.dflt=false; LS.set('gns_user',JSON.stringify(u));
+  return btoa(JSON.stringify({id:u.id,wrap:w}));
+}
+if(UMODE){ document.getElementById('uid').style.display=''; document.getElementById('lead').textContent='임직원 로그인 · 사번 / 비밀번호';
+  document.getElementById('links').style.display=''; document.getElementById('reqA').onclick=()=>{ const r=document.getElementById('req'); r.style.display=r.style.display?'':'none'; }; }
+document.getElementById('go').onclick=login;
+['uid','pw'].forEach(i=>document.getElementById(i).addEventListener('keydown',e=>{ if(e.key==='Enter') login(); }));
+(async()=>{ const saved=LS.get('gns_pw'); if(!saved) return; let su=null; try{ su=JSON.parse(LS.get('gns_user')||'null'); }catch(e){}
+  if(!UMODE) return open(saved);
+  const pub=su&&USERS[await hid(su.id)]; if(!pub){ LS.del('gns_pw'); LS.del('gns_user'); return; }   // 삭제된 사용자·로그인 기록 없음 → 다시 로그인
+  open(saved,{...su,role:pub.role,menus:pub.menus}); })();
 })();
 </script></body></html>"""
+
+
+def _public_users() -> dict:
+    """build/users.json (모니터 '사용자 관리'가 만든 것, git 제외) → {해시(사번): {봉인 + 권한·메뉴}}.
+    이름·사번 평문은 싣지 않는다. 비어 있으면 단일 비밀번호 모드."""
+    try:
+        return {hashlib.sha256(("gns:" + k).encode("utf-8")).hexdigest()[:16]: {**v["wrap"], "role": v["role"], "menus": v.get("menus")}
+                for k, v in json.load(open(os.path.join(HERE, "build", "users.json"), encoding="utf-8")).items()}
+    except (OSError, ValueError):
+        return {}
 
 
 def write_shell(manifest: dict):
@@ -142,6 +202,7 @@ def write_shell(manifest: dict):
     os.makedirs(os.path.join(HERE, "docs"), exist_ok=True)
     out = os.path.join(HERE, "docs", "index.html")
     built = manifest["built"]
+    manifest = {**manifest, "users": _public_users()}
     with open(out, "w", encoding="utf-8") as f:
         f.write(SHELL % (f"{built[:4]}-{built[4:6]}-{built[6:8]} {built[8:10]}:{built[10:12]} 빌드", json.dumps(manifest, ensure_ascii=False)))
     open(os.path.join(HERE, "docs", ".nojekyll"), "w").close()
