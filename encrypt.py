@@ -60,12 +60,12 @@ button{width:100%%;margin-top:4px;padding:12px;border:0;border-radius:10px;backg
 .req{font-size:12px;color:#14202e;background:#f4f6f8;border-radius:8px;padding:10px 12px;margin-top:10px;line-height:1.6}
 .note{font-size:11px;color:#6b7a8c;margin-top:18px;line-height:1.7}</style></head>
 <body><div class="wrap"><div class="brand">GENUONE SCIENCE</div><h1>Monitor</h1><div class="sub">제뉴원사이언스 내/외부 환경 모니터</div><div class="bar"></div>
-<div class="card"><h2><span class="ic">🔒</span><span id="lead">경영진 전용 · 비밀번호</span></h2>
+<div class="card"><h2><span class="ic">🔒</span><span id="lead">로그인</span></h2>
 <input id="uid" placeholder="사번" autocomplete="username" style="display:none">
 <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password"><button id="go">로그인</button><div class="err" id="err"></div>
-<div class="links" id="links" style="display:none">등록된 사용자만 · <a id="reqA">처음이세요? 사용 신청</a></div>
-<div class="req" id="req" style="display:none">전략기획팀(관리자)에 <b>사번·이름</b>을 알려 주세요. 등록되면 초기 비밀번호는 사번과 같고, 처음 들어올 때 새 비밀번호로 바꿉니다.</div></div>
-<div class="note">🔐 사번별 암호 봉인 · 볼 수 있는 메뉴는 관리자가 사람마다 지정 · 로그인은 이 브라우저에 기억됩니다 (상단 이름 배지 = 로그아웃)<br>본 페이지와 데이터의 권리는 제뉴원사이언스에 귀속됩니다. 임직원 내부 업무 목적으로만 사용하며 외부 반출·공개를 금합니다.<br>데이터 기준 %s</div></div>
+<div class="links" id="links" style="display:none"><a id="reqA">사용 신청</a></div>
+<div class="req" id="req" style="display:none">전략기획팀에 사번·이름을 알려 주세요. 초기 비밀번호는 사번입니다.</div></div>
+<div class="note">본 페이지와 데이터의 권리는 제뉴원사이언스에 귀속됩니다. 임직원 내부 업무 목적으로만 사용하며 외부 반출·공개를 금합니다.<br>데이터 기준 %s</div></div>
 <script>
 (function(){
 const P=%s;
@@ -148,7 +148,8 @@ async function wrapNew(id,pw,info){
   const gz=new Uint8Array(await new Response(new Blob([JSON.stringify(info)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
   return {salt:e64(salt),iv:e64(iv),ct:e64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,gz))),iter:P.iter};
 }
-UREADY=(async()=>{ const r=await realFetch('users.json?v='+Date.now()); if(!r.ok) throw new Error('users '+r.status); const j=await r.json(); USERS=j.users||{}; KS=j.ks||''; UMODE=Object.keys(USERS).length>0; })();
+const loadUsers=async()=>{ const r=await realFetch('users.json?v='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error('users '+r.status); const j=await r.json(); USERS=j.users||{}; KS=j.ks||''; UMODE=Object.keys(USERS).length>0; };
+UREADY=loadUsers();
 // 이 기기에서 바꾼 비밀번호: 관리자가 반영하기 전까지 localStorage 봉인(base = 그때 공개 봉인)을 쓴다. 공개 봉인이 바뀌면 버린다.
 function localWrap(h){ try{ const o=JSON.parse(LS.get('gns_wrap:'+h)||'null'); if(o&&o.base===USERS[h].ct) return o; if(o) LS.del('gns_wrap:'+h); }catch(e){} return null; }
 async function secApi(user){
@@ -176,25 +177,29 @@ async function open(pw,user){
     document.open(); document.write(html); document.close();
   }catch(e){ LS.del('gns_pw'); LS.del('gns_user'); err.textContent=UMODE?'사번 또는 비밀번호가 맞지 않습니다.':'비밀번호가 맞지 않습니다.'; }
 }
+// 이름·직급 = 관리자 목록용 봉인(m) (사이트 키로 연다)
+async function metaOf(pw,pub){ try{ const sk=await kdf(pw,b64(KS),P.iter,['decrypt']), a=b64(pub.m); return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:a.slice(0,12)},sk,a.slice(12)))); }catch(e){ return {}; } }
 async function login(){
   const err=document.getElementById('err'), id=document.getElementById('uid').value.trim(), pw=document.getElementById('pw').value;
   try{ await UREADY; }catch(e){ err.textContent='사용자 목록을 불러오지 못했습니다. 잠시 뒤 다시 시도하세요.'; return; }
   if(!UMODE) return open(pw);
   err.textContent='확인 중…';
-  try{ const h=await hid(id), pub=USERS[h]; if(!pub) throw 0;
-    const lw=localWrap(h), info=await unwrap(lw||pub,id,pw);
-    await open(info.pw,{id:info.id,name:info.name,role:pub.role,menus:pub.menus,dflt:!lw&&pw===id});
+  try{ const h=await hid(id); let pub=USERS[h], lw=localWrap(h), info=null;
+    try{ if(!pub) throw 0; info=await unwrap(lw||pub,id,pw); }
+    catch(e){ await loadUsers(); pub=USERS[h]; if(!pub) throw 0; lw=localWrap(h); info=await unwrap(lw||pub,id,pw); }   // 방금 등록·변경된 사용자 — 목록을 다시 받아 한 번 더
+    const mt=await metaOf(info.pw,pub);                             // 이름·직급은 관리자가 고친 값(m) 우선
+    await open(info.pw,{id:info.id,name:mt.name||info.name,rank:mt.rank||'',role:pub.role,menus:pub.menus,dflt:!lw&&pw===id});
   }catch(e){ err.textContent='사번 또는 비밀번호가 맞지 않습니다.'; }
 }
 document.getElementById('go').onclick=login;
 ['uid','pw'].forEach(i=>document.getElementById(i).addEventListener('keydown',e=>{ if(e.key==='Enter') login(); }));
 document.getElementById('reqA').onclick=()=>{ const r=document.getElementById('req'); r.style.display=r.style.display?'':'none'; };
 (async()=>{ try{ await UREADY; }catch(e){ document.getElementById('err').textContent='사용자 목록을 불러오지 못했습니다. 새로고침 해 주세요.'; return; }
-  if(UMODE){ document.getElementById('uid').style.display=''; document.getElementById('lead').textContent='임직원 로그인 · 사번 / 비밀번호'; document.getElementById('links').style.display=''; }
+  if(UMODE){ document.getElementById('uid').style.display=''; document.getElementById('lead').textContent='로그인'; document.getElementById('links').style.display=''; }
   const saved=LS.get('gns_pw'); if(!saved) return; let su=null; try{ su=JSON.parse(LS.get('gns_user')||'null'); }catch(e){}
   if(!UMODE) return open(saved);
   const pub=su&&USERS[await hid(su.id)]; if(!pub){ LS.del('gns_pw'); LS.del('gns_user'); return; }   // 삭제된 사용자 → 다시 로그인
-  open(saved,{...su,role:pub.role,menus:pub.menus}); })();
+  const mt=await metaOf(saved,pub); open(saved,{...su,name:mt.name||su.name,rank:mt.rank||'',role:pub.role,menus:pub.menus}); })();
 })();
 </script></body></html>"""
 
